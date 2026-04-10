@@ -74,57 +74,39 @@ def get_news(city: str) -> str:
 
 llm = ChatMistralAI(model="mistral-small-2506")
 
-available_tools = [get_weather, get_news]
+# middleware to add -> human in the loop
 
-tools = {
-    "get_weather": get_weather,
-    "get_news": get_news
-}
+@wrap_tool_call
+def human_approval(request, handler):
+    """ Ask for human approval befor every tool call """
+    tool_name = request.tool_call["name"]
+    confirm = input(f"Agent wants to call tool: {tool_name}. Provide approval (y/n): ")
 
-llm_with_tool = llm.bind_tools(available_tools)
+    if confirm.lower() != "yes":
+        return ToolMessage(
+            content="Tool call deniied by user.",
+            tool_call_id=request.tool_call["id"]
+        )
+    return handler(request)
 
-# Agent Loop
+# Create Agent
+agent = create_agent(
+    llm,
+    tools=[get_weather, get_news],
+    system_prompt="You are a helpful city assistant",
+    middleware=[human_approval]
+)
 
-messages = []
-
-print("City Intelligent System")
-print("Type exit to quit")
+print("City Agent | type exit to quit")
 
 while True:
-    prompt = input("You: ")
-    if prompt.lower() == "exit":
+    user_input = input("You: ")
+
+    if user_input.lower() == "exit":
         break
-    messages.append(HumanMessage(prompt))
 
-    while True:
-        result = llm_with_tool.invoke(messages)
-        
+    result = agent.invoke({
+        "messages": [{"role": "user", "content": user_input}]
+    })
 
-        # if tool is required
-        if result.tool_calls:
-            messages.append(result)
-            tool_call_denied_by_user = False
-            for tool_call in result.tool_calls:
-                tool_name = tool_call["name"]
-                #HUMAN IN THE LOOP
-                confirm = input(f"Agent wants to call {tool_name} (y/n):")
-
-                if confirm.lower() == "n":
-                    print("Tool call denied and I cannot get the latest info.")
-                    tool_call_denied_by_user = True
-                    break
-
-                tool_message = tools[tool_name].invoke(tool_call["args"])
-                messages.append(ToolMessage(
-                    content = tool_message,
-                    tool_call_id = tool_call["id"]
-                ))
-
-            if tool_call_denied_by_user:
-                messages.pop() # remove the AIMessage
-                break 
-
-            continue
-        else:
-            print(result.content)
-            break
+    print("bot : ", result['messages'][-1].content)

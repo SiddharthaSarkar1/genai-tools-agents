@@ -1,5 +1,11 @@
 # City Intelligence Tool
 
+### Tools
+### AI Agents
+### Tool Calling
+### LangChain agent (langchain.agents)
+### Integrating external API to empower tools
+
 This is a city intelligence tool
 
 To create this we have used
